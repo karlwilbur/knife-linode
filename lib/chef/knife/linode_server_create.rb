@@ -119,6 +119,10 @@ class Chef
         :proc => Proc.new { |t| Chef::Config[:knife][:template_file] = t },
         :default => false
 
+      option :secret_file,
+             :long => "--secret-file FILE",
+             :description => "Path to encrypted data bag secret file"
+
       option :run_list,
         :short => "-r RUN_LIST",
         :long => "--run-list RUN_LIST",
@@ -231,6 +235,7 @@ class Chef
         bootstrap.config[:distro] = locate_config_value(:distro)
         bootstrap.config[:use_sudo] = true unless config[:ssh_user] == 'root'
         bootstrap.config[:template_file] = locate_config_value(:template_file)
+        bootstrap.config[:secret_file] = locate_config_value(:secret_file)
         bootstrap.config[:environment] = config[:environment]
         bootstrap.config[:host_key_verify] = config[:host_key_verify]
         bootstrap
