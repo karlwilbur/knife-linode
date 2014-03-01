@@ -43,28 +43,28 @@ class Chef
         :long => "--linode-flavor FLAVOR",
         :description => "The flavor of server",
         :proc => Proc.new { |f| Chef::Config[:knife][:linode_flavor] = f },
-        :default => 1
+        :default => 1 # Linode 1024
 
       option :linode_image,
         :short => "-I IMAGE",
         :long => "--linode-image IMAGE",
         :description => "The image for the server",
         :proc => Proc.new { |i| Chef::Config[:knife][:linode_image] = i },
-        :default => 93
+        :default => 99 # Ubuntu 12.04 LTS
 
       option :linode_kernel,
         :short => "-k KERNEL",
         :long => "--linode-kernel KERNEL",
         :description => "The kernel for the server",
         :proc => Proc.new { |i| Chef::Config[:knife][:linode_kernel] = i },
-        :default => 138
+        :default => 138 # Latest 64 bit
 
       option :linode_datacenter,
         :short => "-D DATACENTER",
         :long => "--linode-datacenter DATACENTER",
         :description => "The datacenter for the server",
         :proc => Proc.new { |i| Chef::Config[:knife][:linode_datacenter] = i },
-        :default => 3
+        :default => 3 # Fremont, CA, USA
 
       option :linode_node_name,
         :short => "-L NAME",
@@ -130,11 +130,26 @@ class Chef
         :proc => lambda { |o| o.split(/[\s,]+/) },
         :default => []
 
+      option :json_attributes,
+        :short => "-j JSON",
+        :long => "--json-attributes JSON",
+        :description => "A JSON string to be added to the first run of chef-client",
+        :proc => lambda { |o| JSON.parse(o) }
+
       option :host_key_verify,
         :long => "--[no-]host-key-verify",
         :description => "Verify host key, enabled by default",
         :boolean => true,
         :default => true
+
+      Chef::Config[:knife][:hints] ||= {"linode" => {}}
+      option :hint,
+        :long => "--hint HINT_NAME[=HINT_FILE]",
+        :description => "Specify Ohai Hint to be set on the bootstrap target.  Use multiple --hint options to specify multiple hints.",
+        :proc => Proc.new { |h|
+           name, path = h.split("=")
+           Chef::Config[:knife][:hints][name] = path ? JSON.parse(::File.read(path)) : Hash.new
+        }
 
       def tcp_test_ssh(hostname)
         Chef::Log.debug("testing ssh connection to #{hostname}")
@@ -219,6 +234,15 @@ class Chef
           puts("done")
         }
 
+        Chef::Config[:knife][:hints]['linode'].merge!({
+            'server_id' => server.id.to_s,
+            'datacenter_id' => locate_config_value(:linode_datacenter),
+            'flavor_id' => locate_config_value(:linode_flavor),
+            'image_id' => locate_config_value(:linode_image),
+            'kernel_id' => locate_config_value(:linode_kernel),
+            'ip_addresses' => server.ips.map(&:ip)})
+
+        msg_pair("JSON Attributes", config[:json_attributes]) unless !config[:json_attributes] || config[:json_attributes].empty?
         bootstrap_for_node(server,fqdn).run
       end
 
@@ -232,6 +256,7 @@ class Chef
         bootstrap.config[:chef_node_name] = config[:chef_node_name] || server.id
         bootstrap.config[:prerelease] = config[:prerelease]
         bootstrap.config[:bootstrap_version] = locate_config_value(:bootstrap_version)
+        bootstrap.config[:first_boot_attributes] = locate_config_value(:json_attributes) || {}
         bootstrap.config[:distro] = locate_config_value(:distro)
         bootstrap.config[:use_sudo] = true unless config[:ssh_user] == 'root'
         bootstrap.config[:template_file] = locate_config_value(:template_file)
